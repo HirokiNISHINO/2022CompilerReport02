@@ -119,8 +119,6 @@ public class Lexer
 
 		//+-/*/;
 		switch(c) {
-		case '+':
-		case '-':
 		case '*':
 		case '/':
 		case ';':
@@ -131,11 +129,34 @@ public class Lexer
 		case '}':
 		case ',':
 		case '%':
+		case '^':
 			return new Token(i, "" + c, lineNo);
 		default:
 			break;
 		}
-		
+
+		//+ and ++
+		if (c == '+') {
+			i = this.read();
+			c = (char)i;
+			if (c != '+') {
+				this.unread(i);
+				return new Token('+', "+", lineNo);
+			}
+			return new Token(TokenClass.PLUS_PLUS, "++", lineNo);
+		}
+
+		//- and --
+		if (c == '-') {
+			i = this.read();
+			c = (char)i;
+			if (c != '-') {
+				this.unread(i);
+				return new Token('-', "-", lineNo);
+			}
+			return new Token(TokenClass.MINUS_MINUS, "--", lineNo);
+		}
+
 		//= and ==
 		if (c == '=') {
 			i = this.read();
@@ -161,25 +182,58 @@ public class Lexer
 		if (c == '<') {
 			i = this.read();
 			c = (char)i;
-			if (c != '=') {
-				this.unread(i);
-				return new Token('<', "<", lineNo);
+			if (c == '=') {
+				return new Token(TokenClass.LTEQ, "<=", lineNo);
 			}
-			return new Token(TokenClass.LTEQ, "<=", lineNo);
+			if (c== '<') {
+				return new Token(TokenClass.SAL, "<<", lineNo);
+			}
+			this.unread(i);
+			return new Token('<', "<", lineNo);
 		}
 		
 		//>, >=
 		if (c == '>') {
 			i = this.read();
 			c = (char)i;
-			if (c != '=') {
-				this.unread(i);
-				return new Token('>', ">", lineNo);
+			if (c == '=') {
+				return new Token(TokenClass.GTEQ, ">=", lineNo);
 			}
-			return new Token(TokenClass.GTEQ, ">=", lineNo);
+			if (c == '>') {
+				i = this.read();
+				c = (char)i;
+				if (c != '>') {
+					this.unread(i);
+					return new Token(TokenClass.SAR, ">>", lineNo);		
+				}
+				return new  Token(TokenClass.SHR, ">>>", lineNo);	
+			}
+			this.unread(i);
+			return new Token('>', ">", lineNo);
 		}
 		
-
+		//& and &&
+		if (c == '&') {
+			i = this.read();
+			c = (char)i;
+			if (c == '&'){
+				return new Token(TokenClass.LAND, "&&", lineNo);
+			}
+			this.unread(i);
+			return new Token('&', "&", lineNo); 
+		}
+		
+		//| and ||
+		if (c == '|') {
+			i = this.read();
+			c = (char)i;
+			if (c == '|'){
+				return new Token(TokenClass.LOR, "||", lineNo);
+			}
+			this.unread(i);
+			return new Token('|', "|", lineNo); 
+		}
+		
 		//check if the character is an identifier start or not.
 		if (!Character.isJavaIdentifierStart(i)) {
 			return new Token(TokenClass.ERROR, "" + c, lineNo);
@@ -243,6 +297,10 @@ public class Lexer
 		
 		if (lexeme.equals("def")) {
 			return new Token(TokenClass.DEF, lexeme, lineNo);
+		}
+		
+		if (lexeme.equals("do")) {
+			//TODO:ここにコードを書くこと。
 		}
 
 		//if none of above, it's an identifier.

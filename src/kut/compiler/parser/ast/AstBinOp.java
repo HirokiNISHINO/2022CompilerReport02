@@ -59,10 +59,33 @@ public class AstBinOp extends AstNode
 		ltype = lhs.checkTypes(gen);
 		rtype = rhs.checkTypes(gen);
 
-		if (this.t.getC() == TokenClass.EQ 	|| this.t.getC() == TokenClass.NEQ 	||
-			this.t.getC() == '<'			|| this.t.getC() == TokenClass.LTEQ ||
-			this.t.getC() == '>' 			|| this.t.getC() == TokenClass.GTEQ ){
+		int tc = this.t.getC();
+		
+		if (tc == TokenClass.LAND || tc == TokenClass.LOR) {
+			if (ltype != ExprType.BOOLEAN || rtype != ExprType.BOOLEAN) {
+				throw new CompileErrorException("logical and (&&) and logical or (||) can be applied only to boolean values. : " + t);
+			}
+			return ExprType.BOOLEAN;
+		}
+		
+		if (tc == '&' || tc == '|' || tc == '^') {
+			if (ltype != ExprType.INT || rtype != ExprType.INT) {
+				throw new CompileErrorException("bit and (&) or (|), and xor (^), can be applied only to integer values. : " + t);
+			}
+			return ExprType.INT;			
+		}
+		
+		if (tc == TokenClass.EQ || tc == TokenClass.NEQ  ||
+			tc == '<'			|| tc == TokenClass.LTEQ ||
+			tc == '>' 			|| tc == TokenClass.GTEQ ){
 			return this.doTypeCheckComparision();
+		}
+		
+		if (tc == TokenClass.SAL || tc == TokenClass.SAR || tc == TokenClass.SHR) {
+			if (ltype != ExprType.INT || rtype != ExprType.INT) {
+				throw new CompileErrorException("shift operators can be applied only to integer values. : " + t);
+			}
+			return ExprType.INT;
 		}
 		
 		
@@ -70,7 +93,7 @@ public class AstBinOp extends AstNode
 		boolean ltypeok = (ltype == ExprType.INT || ltype == ExprType.DOUBLE);
 		
 		if (rtypeok != true || ltypeok != true) {
-			throw new CompileErrorException("invalid binary operation (only integer and double values can be used). : " + t.toString());
+			throw new CompileErrorException("invalid binary operation (only integer and double values can be used). : " + t);
 		}
 
 		if (rtype == ExprType.DOUBLE || ltype == ExprType.DOUBLE) {
@@ -87,7 +110,7 @@ public class AstBinOp extends AstNode
 	{
 		//string can be compared only between string values.
 		if ((ltype == ExprType.STRING || rtype == ExprType.STRING) && (ltype != rtype)) {
-			throw new CompileErrorException("a boolean value can be only compared to another boolean value. : " + t.toString());
+			throw new CompileErrorException("a string value can be only compared to another string value. : " + t.toString());
 		}
 		
 		//boolean values can be only compared between boolean values.
@@ -109,6 +132,20 @@ public class AstBinOp extends AstNode
 	@Override
 	public void cgen(CodeGenerator gen) throws IOException, CompileErrorException
 	{	
+		//logical and/or doesn't require both operands.
+		int tc = t.getC();
+		if (tc == TokenClass.LAND || tc == TokenClass.LOR) {
+			this.opLandLor(gen);
+			return;
+		}
+		
+		if (tc == '&' || tc == '|' || tc == '^') {
+			this.opBitOp(gen);
+			return;			
+		}
+
+		
+		//when we need both operands.
 		lhs.cgen(gen);
 		gen.printCode("push rax");
 		rhs.cgen(gen);
@@ -126,7 +163,7 @@ public class AstBinOp extends AstNode
 			this.opDoubleDouble(gen);
 		}
 		else if (ltype == ExprType.BOOLEAN && rtype == ExprType.BOOLEAN){
-			this.opBoolean(gen);
+			this.opBooleanEqNeq(gen);
 		}
 		else if (ltype == ExprType.STRING && rtype == ExprType.STRING){
 			this.opString(gen);
@@ -247,12 +284,89 @@ public class AstBinOp extends AstNode
 		}			
 	}
 	
+	
 	/**
 	 * @param gen
 	 * @throws IOException
 	 * @throws CompileErrorException
 	 */
-	public void opBoolean(CodeGenerator gen) throws IOException, CompileErrorException
+	public void opBitOp(CodeGenerator gen) throws IOException, CompileErrorException
+	{
+		lhs.cgen(gen);
+		gen.printCode("push rax");
+		rhs.cgen(gen);
+		if (t.getC() == '&') {
+			gen.printCode("and rax, [rsp]");
+			gen.printCode("add rsp, 8");
+		}
+		else if (t.getC() == '|') {
+			gen.printCode("or rax, [rsp]");
+			gen.printCode("add rsp, 8");
+			
+		}
+		else if (t.getC() == '^') {
+			gen.printCode("xor rax, [rsp]");
+			gen.printCode("add rsp, 8");
+		}
+
+		return;
+	}
+	/**
+	 * @param gen
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public void opLandLor(CodeGenerator gen) throws IOException, CompileErrorException
+	{
+		CondLabels lbls = gen.generateCondLabels();
+		
+		// &&
+		if (t.getC() == TokenClass.LAND) {
+			lhs.cgen(gen);
+			gen.printCode("cmp rax, 0");
+			gen.printCode("je " + lbls.labelFalse);
+			gen.printCode();
+			
+			rhs.cgen(gen);
+			gen.printCode("cmp rax, 0");
+			gen.printCode("je " + lbls.labelFalse);
+			gen.printCode("mov rax, 1");
+			gen.printCode("jmp " + lbls.labelCondEnd);
+			
+			gen.printLabel(lbls.labelFalse);
+			gen.printCode("mov rax, 0");			
+			gen.printLabel(lbls.labelCondEnd);
+			
+			return;
+		}
+		
+		// ||
+		lhs.cgen(gen);
+		gen.printCode("cmp rax, 0");
+		gen.printCode("jne " + lbls.labelTrue);
+		gen.printCode();
+
+		rhs.cgen(gen);
+		gen.printCode("cmp rax, 0");
+		gen.printCode("jne " + lbls.labelTrue);
+		gen.printCode("mov rax, 0");
+		gen.printCode("jmp " + lbls.labelCondEnd);
+
+		gen.printLabel(lbls.labelTrue);
+		gen.printCode("mov rax, 1");			
+		gen.printLabel(lbls.labelCondEnd);
+
+		
+		//end
+		return;
+	}
+	
+	/**
+	 * @param gen
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public void opBooleanEqNeq(CodeGenerator gen) throws IOException, CompileErrorException
 	{
 		switch(t.getC())
 		{
@@ -303,7 +417,7 @@ public class AstBinOp extends AstNode
 			gen.printLabel	(labels3.labelCondEnd);
 		}
 			break;
-			
+						
 		default:
 			throw new CompileErrorException("the code shouldn't reach here. There may be a bug in the parser.");				
 		}	
@@ -628,6 +742,30 @@ public class AstBinOp extends AstNode
 		}
 			break;
 			
+		case TokenClass.SAL:
+		{
+			gen.printCode("mov rcx, rax");
+			gen.printCode("pop rax");
+			gen.printCode("sal rax, cl");
+		}
+			break;
+			
+		case TokenClass.SAR:
+		{
+			gen.printCode("mov rcx, rax");
+			gen.printCode("pop rax");
+			gen.printCode("sar rax, cl");			
+		}
+			break;
+			
+		case TokenClass.SHR:
+		{
+			gen.printCode("mov rcx, rax");
+			gen.printCode("pop rax");
+			gen.printCode("shr rax, cl");			
+		}
+			break;
+
 		default:
 			throw new CompileErrorException("the code shouldn't reach here. There may be a bug in the parser.");	
 		}

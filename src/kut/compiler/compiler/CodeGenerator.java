@@ -29,7 +29,7 @@ public class CodeGenerator
 	protected Platform		platform;
 	protected String 		filename;
 	protected AstProgram	program	;
-	protected PrintWriter 	writer	;
+	protected PrintWriter	writer	;
 	
 	protected SymbolTable	symbolTable;
 		
@@ -73,6 +73,22 @@ public class CodeGenerator
 		lbls.labelTrue 		= "tmp_cond_label#true" 	+ tmpLabelIndex;
 		lbls.labelFalse 	= "tmp_cond_label#false"	+ tmpLabelIndex;
 		lbls.labelCondEnd 	= "tmp_cond_label#end" 		+ tmpLabelIndex;
+		
+		tmpLabelIndex++;
+		return lbls;
+	}
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public DoWhileLabels generateDoWhileLabels() throws IOException, CompileErrorException
+	{
+		DoWhileLabels lbls = new DoWhileLabels();
+		
+		lbls.labelEntry = "tmp_dowhile_label#entry" + tmpLabelIndex;
+		lbls.labelExit	= "tmp_dowhile_label#exit"  + tmpLabelIndex;
 		
 		tmpLabelIndex++;
 		return lbls;
@@ -183,7 +199,7 @@ public class CodeGenerator
 	 */
 	public String getExitSysCallNum()
 	{
-		return (this.platform == Platform.MAC ? "0x2000001" : "0x01");
+		return (this.platform == Platform.MAC ? "0x2000001" : "60");
 	}
 	
 	/**
@@ -442,12 +458,15 @@ public class CodeGenerator
 		
 		this.printCode(	"and rsp, 0xFFFFFFFFFFFFFFF0 ; stack must be 16 bytes aligned to call a C function.");
 		this.printCode(	"push rax ; we need to preserve rax here.");
+		this.printCode( "push rax ; pushing twice for 16 byte alignment. We'll discard this later. ");
 		this.printCode();
 		this.printCode(	"; call printf to print out the exti code.");
 		this.printCode(	"lea rdi, [rel exit_fmt#] ; the format string");
 		this.printCode(	"mov rsi, rax		; the exit code ");
-		this.printCode(  "mov rax, 0			; no xmm register is used.");
+		this.printCode( "mov rax, 0			; no xmm register is used.");
 		this.printCode(	"call " + this.getExternalFunctionName("printf"));
+		this.printCode();
+		this.printCode(	"pop rax ; this value will be discared (as we did 'push rax' twice for 16 bytes alignment.");
 		this.printCode();
 		this.printCode(	"mov rax, "+ this.getExitSysCallNum() + "; specify the exit sys call.");
 		this.printCode(	"pop rdi ; this is the rax value we pushed at the entry of this sub routine");

@@ -9,6 +9,7 @@ import kut.compiler.lexer.Lexer;
 import kut.compiler.lexer.Token;
 import kut.compiler.lexer.TokenClass;
 import kut.compiler.parser.ast.AstNode;
+import kut.compiler.parser.ast.AstPostfixOp;
 import kut.compiler.parser.ast.AstAssignment;
 import kut.compiler.parser.ast.AstBinOp;
 import kut.compiler.parser.ast.AstBlockStatements;
@@ -153,9 +154,23 @@ public class Parser
 		case TokenClass.WHILE:
 			return whileStmt();
 			
+		case TokenClass.DO:
+			return dowhileStmt();
+			
 		default:
 			return exprStmt();
 		}
+	}
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode dowhileStmt() throws IOException, CompileErrorException
+	{
+		//TODO:ここにコードを書くこと。
+		return null;
 	}
 	
 	/**
@@ -167,7 +182,7 @@ public class Parser
 	{
 		Token t = this.getCurrentToken();
 		if (t.getC() != TokenClass.DEF) {
-			throw new SyntaxErrorException("expected 'def' but found: " + t.getL());
+			throw new SyntaxErrorException("expected 'def' but found: " + t);
 		}
 		this.consumeCurrentToken();
 		
@@ -176,20 +191,20 @@ public class Parser
 		if (tc != TokenClass.VOID 		&& tc != TokenClass.INT 	&&
 			tc != TokenClass.BOOLEAN	&& tc != TokenClass.DOUBLE	&&
 			tc != TokenClass.STRING	){
-			throw new SyntaxErrorException("expected a type name but found: " + t.getL());
+			throw new SyntaxErrorException("expected a type name but found: " + t);
 		}
 		this.consumeCurrentToken();
 		
 		Token t2 = this.getCurrentToken();
 		if (t2.getC() != TokenClass.Identifier) {
-			throw new SyntaxErrorException("expected a function name but found: " + t2.getL());
+			throw new SyntaxErrorException("expected a function name but found: " + t2);
 		}
 		this.consumeCurrentToken();
 		
 		
 		Token t3 = this.getCurrentToken();
 		if (t3.getC() != '(') {
-			throw new SyntaxErrorException("expected '(' but found: " + t3.getL());			
+			throw new SyntaxErrorException("expected '(' but found: " + t3);			
 		}
 		this.consumeCurrentToken();
 	
@@ -201,13 +216,13 @@ public class Parser
 			if (t3c != TokenClass.VOID 		&& t3c != TokenClass.INT 	&&
 				t3c != TokenClass.BOOLEAN	&& t3c != TokenClass.DOUBLE	&&
 				t3c != TokenClass.STRING	){	
-				throw new SyntaxErrorException("expected a type name but found: " + t3.getL());
+				throw new SyntaxErrorException("expected a type name but found: " + t3);
 			}
 			this.consumeCurrentToken();
 
 			Token t4 = this.getCurrentToken();
 			if (t4.getC() != TokenClass.Identifier) {
-				throw new SyntaxErrorException("expected a parameter name but found: " + t4.getL());
+				throw new SyntaxErrorException("expected a parameter name but found: " + t4);
 			}
 
 			AstIdentifier id = new AstIdentifier(t4);
@@ -222,14 +237,14 @@ public class Parser
 				break;
 			}
 			if (t3.getC() != ',') {
-				throw new SyntaxErrorException("expected ',' but found: " + t4.getL());				
+				throw new SyntaxErrorException("expected ',' but found: " + t4);				
 			}
 			this.consumeCurrentToken();
 			t3 = this.getCurrentToken();
 		}
 		
 		if (t3.getC() != ')'){
-			throw new SyntaxErrorException("expected ')' but found: " + t3.getL());			
+			throw new SyntaxErrorException("expected ')' but found: " + t3);			
 		}
 		this.consumeCurrentToken();
 		
@@ -247,16 +262,27 @@ public class Parser
 	{
 		Token t = this.getCurrentToken();
 		if (t.getC() != TokenClass.WHILE) {
-			throw new SyntaxErrorException("expected 'while' but found: " + t.getL());
+			throw new SyntaxErrorException("expected 'while' but found: " + t);
+		}
+		this.consumeCurrentToken();
+		
+		Token t2 = this.getCurrentToken();
+		if (t2.getC() != '(') {
+			throw new SyntaxErrorException("expected '(' but found: " + t);			
 		}
 		this.consumeCurrentToken();
 		
 		AstNode expr = expr();
 		
+		t2 = this.getCurrentToken();
+		if (t2.getC() != ')') {
+			throw new SyntaxErrorException("expected ')' but found: " + t);			
+		}
+		this.consumeCurrentToken();
+		
 		AstNode body = statement();
 		
 		return new AstWhile(expr, body, t);
-		
 	}
 	/**
 	 * @return
@@ -269,7 +295,7 @@ public class Parser
 		
 		Token t = this.getCurrentToken();
 		if (t.getC() != '{') {
-			throw new SyntaxErrorException("expected ';' but found: " + t.getL());
+			throw new SyntaxErrorException("expected ';' but found: " + t);
 		}
 		this.consumeCurrentToken();
 
@@ -284,7 +310,7 @@ public class Parser
 		
 		t = this.getCurrentToken();
 		if (t.getC() != '}') {
-			throw new SyntaxErrorException("expected ';' but found: " + t.getL());
+			throw new SyntaxErrorException("expected ';' but found: " + t);
 		}
 		this.consumeCurrentToken();
 		return stmts;
@@ -300,7 +326,7 @@ public class Parser
 		
 		Token t = this.getCurrentToken();
 		if (t.getC() != ';') {
-			throw new SyntaxErrorException("expected ';' but found: " + t.getL());
+			throw new SyntaxErrorException("expected ';' but found: " + t);
 		}
 		this.consumeCurrentToken();
 		
@@ -494,9 +520,144 @@ public class Parser
 	 */
 	public AstNode expr() throws IOException, CompileErrorException
 	{
-		return equalityExp();
+		return lorExpr();
 	}
 	
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode lorExpr() throws IOException, CompileErrorException
+	{
+		AstNode lhs = landExpr();
+		while(true) {
+			Token t = this.getCurrentToken();
+			
+			if (t == null) {
+				break;
+			}
+			
+			if (t.getC() != TokenClass.LOR) {
+				break;
+			}
+			this.consumeCurrentToken();
+			
+			AstNode rhs = landExpr();
+			AstNode binop = new AstBinOp(lhs, rhs, t);
+			lhs = binop;
+		}
+		return lhs;	}
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode landExpr() throws IOException, CompileErrorException
+	{
+		AstNode lhs = bitorExpr();
+		while(true) {
+			Token t = this.getCurrentToken();
+			
+			if (t == null) {
+				break;
+			}
+			
+			if (t.getC() != TokenClass.LAND) {
+				break;
+			}
+			this.consumeCurrentToken();
+			
+			AstNode rhs = bitorExpr();
+			AstNode binop = new AstBinOp(lhs, rhs, t);
+			lhs = binop;
+		}
+		return lhs;
+	}
+	
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode bitorExpr() throws IOException, CompileErrorException
+	{
+		AstNode lhs = bitxorExpr();
+		while(true) {
+			Token t = this.getCurrentToken();
+			
+			if (t == null) {
+				break;
+			}
+			
+			if (t.getC() != '|') {
+				break;
+			}
+			this.consumeCurrentToken();
+			
+			AstNode rhs = bitxorExpr();
+			AstNode binop = new AstBinOp(lhs, rhs, t);
+			lhs = binop;
+		}
+		return lhs;
+	}
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode bitxorExpr() throws IOException, CompileErrorException
+	{
+		AstNode lhs = bitandExpr();
+		while(true) {
+			Token t = this.getCurrentToken();
+			
+			if (t == null) {
+				break;
+			}
+			
+			if (t.getC() != '^') {
+				break;
+			}
+			this.consumeCurrentToken();
+			
+			AstNode rhs = bitandExpr();
+			AstNode binop = new AstBinOp(lhs, rhs, t);
+			lhs = binop;
+		}
+		return lhs;
+	}
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode bitandExpr() throws IOException, CompileErrorException
+	{
+		AstNode lhs = equalityExp();
+		while(true) {
+			Token t = this.getCurrentToken();
+			
+			if (t == null) {
+				break;
+			}
+			
+			if (t.getC() != '&') {
+				break;
+			}
+			this.consumeCurrentToken();
+			
+			AstNode rhs = equalityExp();
+			AstNode binop = new AstBinOp(lhs, rhs, t);
+			lhs = binop;
+		}
+		return lhs;
+	}
 	
 	/**
 	 * @return
@@ -532,7 +693,7 @@ public class Parser
 	 */
 	public AstNode relationalExp() throws IOException, CompileErrorException
 	{
-		AstNode lhs = additiveExp();
+		AstNode lhs = shiftExpr();
 		while(true) {
 			Token t = this.getCurrentToken();
 			
@@ -542,6 +703,35 @@ public class Parser
 			
 			if (t.getC() != TokenClass.LTEQ && t.getC()!= TokenClass.GTEQ &&
 				t.getC() != '<'				&& t.getC()!= '>'			  ) {
+				break;
+			}
+			this.consumeCurrentToken();
+			
+			AstNode rhs = shiftExpr();
+			AstNode binop = new AstBinOp(lhs, rhs, t);
+			lhs = binop;
+		}
+		return lhs;		
+	}
+	
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode shiftExpr() throws IOException, CompileErrorException
+	{
+		AstNode lhs = additiveExp();
+		while(true) {
+			Token t = this.getCurrentToken();
+			
+			if (t == null) {
+				break;
+			}
+			
+			if (t.getC() != TokenClass.SAL  && t.getC()!= TokenClass.SAR &&
+				t.getC() != TokenClass.SHR	){
 				break;
 			}
 			this.consumeCurrentToken();
@@ -590,7 +780,7 @@ public class Parser
 	{
 		Token t = this.getCurrentToken();
 
-		AstNode lhs = unaryOp();
+		AstNode lhs = unaryOpExpr();
 		
 		while(true) {
 			t = this.getCurrentToken();
@@ -604,7 +794,7 @@ public class Parser
 			}
 			this.consumeCurrentToken();
 			
-			AstNode rhs = unaryOp();
+			AstNode rhs = unaryOpExpr();
 			AstNode binop = new AstBinOp(lhs, rhs, t);
 			lhs = binop;
 		}
@@ -616,15 +806,32 @@ public class Parser
 	 * @throws IOException
 	 * @throws CompileErrorException
 	 */
-	public AstNode unaryOp() throws IOException, CompileErrorException
+	public AstNode unaryOpExpr() throws IOException, CompileErrorException
 	{		
 		Token t = this.getCurrentToken();
-		if (t.getC() == '-' || t.getC() == '!') {
+		if (t.getC() == '-' || t.getC() == '!' || t.getC() == TokenClass.PLUS_PLUS || t.getC() == TokenClass.MINUS_MINUS) {
 			this.consumeCurrentToken();
-			AstNode p = primary();
+			AstNode p = postfixExpr();
 			return new AstUnaryOp(p,t);
 		}
-		return primary();
+		return postfixExpr();
+	}
+	
+	/**
+	 * @return
+	 * @throws IOException
+	 * @throws CompileErrorException
+	 */
+	public AstNode postfixExpr() throws IOException, CompileErrorException
+	{
+		AstNode n = primary();
+		Token t = this.getCurrentToken();
+		while (t.getC() == TokenClass.PLUS_PLUS || t.getC() == TokenClass.MINUS_MINUS) {
+			n = new AstPostfixOp(n, t);
+			this.consumeCurrentToken();
+			t = this.getCurrentToken();
+		}
+		return n;
 	}
 	
 	/**
